@@ -1,13 +1,9 @@
 ﻿using AngleSharp;
 using AngleSharp.Dom;
-using GVRenamer.Model;
 using OpenQA.Selenium.Chrome;
 using System;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Reflection;
-using System.Text.Json;
 
 namespace GVRenamer
 {
