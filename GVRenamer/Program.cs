@@ -1,5 +1,6 @@
 ﻿using AngleSharp;
 using AngleSharp.Dom;
+using GVRenamer.Extensions;
 using GVRenamer.Model;
 using Microsoft.Extensions.Configuration;
 using OpenQA.Selenium.Chrome;
@@ -17,19 +18,19 @@ namespace GVRenamer
         static void Main(string[] args)
         {
             string[] allfiles = GetFileListByFileExtensions();
-            foreach (var item in allfiles)
+            foreach (var file in allfiles)
             {
-                string fileName = Path.GetFileName(item);
+                string fileName = Path.GetFileName(file);
                 string videoNumber = fileName.Substring(0, fileName.IndexOf("."));
 
                 string link = GetSearchLink(videoNumber);
-                string videoTitle = "";
+                VideoModel model = null;
                 if (!string.IsNullOrWhiteSpace(link))
                 {
-                    videoTitle = GetVideoTitle(link, videoNumber);
+                    model = GetVideoInfo(link, videoNumber);
                 }
-                MoveFile(item, videoTitle);
-                if (!string.IsNullOrWhiteSpace(videoTitle))
+                MoveFile(file, model);
+                if (model != null)
                 {
                     Console.WriteLine(videoNumber + " OK");
                 }
@@ -41,23 +42,42 @@ namespace GVRenamer
 
         public static string[] GetFileListByFileExtensions()
         {
-            return Directory.GetFiles(DirectoryPath, "*.*", SearchOption.TopDirectoryOnly)
+            SearchOption searchOption = SearchOption.AllDirectories;
+
+            if (!AppSettingsModel.GeneralSetting.SearchSubFolder)
+            {
+                searchOption = SearchOption.TopDirectoryOnly;
+            }
+            string[] fileList = Directory.GetFiles(DirectoryPath, "*.*", searchOption)
                 .Where(x => AppSettingsModel.GeneralSetting.FileExtensions.Split(",").Contains(Path.GetExtension(x).ToLower())).ToArray();
+
+            if (AppSettingsModel.GeneralSetting.SearchSubFolder && !string.IsNullOrWhiteSpace(AppSettingsModel.GeneralSetting.EscapeFolder))
+            {
+                foreach (var filePath in AppSettingsModel.GeneralSetting.EscapeFolder.Split(","))
+                {
+                    fileList = fileList.Where(x => !x.Contains(Path.DirectorySeparatorChar + filePath + Path.DirectorySeparatorChar)).ToArray();
+                }
+            }
+
+            return fileList;
         }
 
-        public static void MoveFile(string item, string videoTitle)
+        public static void MoveFile(string soureFilePath, VideoModel model)
         {
-            if (!string.IsNullOrWhiteSpace(videoTitle))
+            if (model != null)
             {
-                string outputFileDir = Path.Combine(DirectoryPath, AppSettingsModel.GeneralSetting.SuccessOutputFolder + "/" + videoTitle);
+                string videoTitle = AppSettingsModel.NameRuleSetting.NamingRule.ToRuleName(model);
+                string folderName = AppSettingsModel.NameRuleSetting.FolderRule.ToRuleName(model);
+
+                string outputFileDir = Path.Combine(DirectoryPath, AppSettingsModel.GeneralSetting.SuccessOutputFolder + folderName);
                 Directory.CreateDirectory(outputFileDir);
-                File.Move(item, outputFileDir + "/" + videoTitle + Path.GetExtension(item));
+                File.Move(soureFilePath, outputFileDir + "/" + videoTitle + Path.GetExtension(soureFilePath));
             }
-            else
+            else if (AppSettingsModel.GeneralSetting.FailedMove)
             {
                 string outputFileDir = Path.Combine(DirectoryPath, AppSettingsModel.GeneralSetting.FailedOutputFolder);
                 Directory.CreateDirectory(outputFileDir);
-                File.Move(item, outputFileDir + "/" + Path.GetFileName(item));
+                File.Move(soureFilePath, outputFileDir + "/" + Path.GetFileName(soureFilePath));
             }
         }
 
@@ -87,14 +107,12 @@ namespace GVRenamer
                     }
                 }
             }
-
             return insideLink;
         }
 
-
-        public static string GetVideoTitle(string url, string videoNumber)
+        public static VideoModel GetVideoInfo(string url, string videoNumber)
         {
-            string fileName = "";
+            VideoModel videoModel = null;
             var config = Configuration.Default.WithDefaultLoader();
             var dom = BrowsingContext.New(config).OpenAsync(url).Result;
 
@@ -116,8 +134,9 @@ namespace GVRenamer
 
             if (queryItem != null)
             {
+                videoModel = new VideoModel();
                 string brand = "";
-
+                #region 抓廠牌
                 int startIndex = brandTitle[0].TextContent.IndexOf("[ ") + 2;
                 int endIndex = brandTitle[0].TextContent.IndexOf(" ]");
 
@@ -144,7 +163,9 @@ namespace GVRenamer
 
                 brand = brandTitle[index].TextContent.Substring(startIndex, length);
                 brand = brand.Replace("[email protected]", "G@MES");
+                #endregion
 
+                #region 抓片名
                 startIndex = queryItem.TextContent.IndexOf("] ") + 1;
                 endIndex = queryItem.TextContent.IndexOf(" (");
                 length = endIndex - startIndex;
@@ -159,15 +180,18 @@ namespace GVRenamer
                     videoTitle = queryItem.TextContent.Substring(startIndex);
                 }
 
-                if (videoTitle.Length > 40)
+                if (videoTitle.Length > AppSettingsModel.NameRuleSetting.MaxTitleLength)
                 {
-                    videoTitle = videoTitle.Substring(0, 40) + "(...)";
+                    videoTitle = videoTitle.Substring(0, AppSettingsModel.NameRuleSetting.MaxTitleLength) + AppSettingsModel.NameRuleSetting.MaxTitleOmitStr;
                 }
+                #endregion
 
-                fileName = string.Format("{0} [{1}] {2}", videoNumber, brand, videoTitle);
+                videoModel.Title = videoTitle.TrimIgnoreFileName();
+                videoModel.Number = videoNumber;
+                videoModel.Studio = brand.TrimIgnoreFileName();
             }
 
-            return fileName.Replace("  ", " ").Replace(":", "-");
+            return videoModel;
         }
     }
 }
