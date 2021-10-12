@@ -5,6 +5,9 @@ G紳士影片重新命名工具，結合搜尋GVDB資料
 # 下載
 * [Releases](https://github.com/natelin08/GVRenamer/releases/latest)
 
+# 快速使用
+將影片丟到同目錄，啟動GVRenamer即可
+
 #  申明
 當你檢閱、下載了本項目原始碼或可執行軟體，即代表你接受了以下條款
 
