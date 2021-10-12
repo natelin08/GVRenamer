@@ -1,5 +1,7 @@
 ﻿using AngleSharp;
 using AngleSharp.Dom;
+using GVRenamer.Model;
+using Microsoft.Extensions.Configuration;
 using OpenQA.Selenium.Chrome;
 using System;
 using System.IO;
@@ -9,16 +11,12 @@ namespace GVRenamer
 {
     internal class Program
     {
-        static string FileExtensions = ".mp4,.avi,.rmvb,.wmv,.mov,.mkv,.flv,.ts,.webm,.iso,.mpg,.m4v";
         static string WebUrl = "https://md.gvdb.org/search-for/#gsc.tab=0&gsc.q={0}%20&gsc.sort=";
-        static string OutputDir = "output";
-        static string FailDir = "fail";
         static string DirectoryPath = Directory.GetCurrentDirectory();
 
         static void Main(string[] args)
         {
-            string[] allfiles = Directory.GetFiles(DirectoryPath, "*.*", SearchOption.TopDirectoryOnly);
-            allfiles = allfiles.Where(x => FileExtensions.Split(",").Contains(Path.GetExtension(x).ToLower())).ToArray();
+            string[] allfiles = GetFileListByFileExtensions();
             foreach (var item in allfiles)
             {
                 string fileName = Path.GetFileName(item);
@@ -41,18 +39,23 @@ namespace GVRenamer
             Console.ReadLine();
         }
 
+        public static string[] GetFileListByFileExtensions()
+        {
+            return Directory.GetFiles(DirectoryPath, "*.*", SearchOption.TopDirectoryOnly)
+                .Where(x => AppSettingsModel.GeneralSetting.FileExtensions.Split(",").Contains(Path.GetExtension(x).ToLower())).ToArray();
+        }
+
         public static void MoveFile(string item, string videoTitle)
         {
-
             if (!string.IsNullOrWhiteSpace(videoTitle))
             {
-                string outputFileDir = Path.Combine(DirectoryPath, OutputDir + "/" + videoTitle);
+                string outputFileDir = Path.Combine(DirectoryPath, AppSettingsModel.GeneralSetting.SuccessOutputFolder + "/" + videoTitle);
                 Directory.CreateDirectory(outputFileDir);
                 File.Move(item, outputFileDir + "/" + videoTitle + Path.GetExtension(item));
             }
             else
             {
-                string outputFileDir = Path.Combine(DirectoryPath, FailDir);
+                string outputFileDir = Path.Combine(DirectoryPath, AppSettingsModel.GeneralSetting.FailedOutputFolder);
                 Directory.CreateDirectory(outputFileDir);
                 File.Move(item, outputFileDir + "/" + Path.GetFileName(item));
             }
@@ -78,8 +81,9 @@ namespace GVRenamer
                     {
                         insideLink = driver.FindElementByXPath("//*[@id='___gcse_0']/div/div/div/div[5]/div[2]/div/div/div[2]/div[1]/div[1]/div[1]/div/a").GetAttribute("href");
                     }
-                    catch {
-                        System.Console.WriteLine("查無資料: " + keyword);
+                    catch
+                    {
+                        Console.WriteLine("查無資料: " + keyword);
                     }
                 }
             }
@@ -163,7 +167,7 @@ namespace GVRenamer
                 fileName = string.Format("{0} [{1}] {2}", videoNumber, brand, videoTitle);
             }
 
-            return fileName.Replace("  ", " ");
+            return fileName.Replace("  ", " ").Replace(":", "-");
         }
     }
 }
